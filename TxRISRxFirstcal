@@ -1,0 +1,114 @@
+%%
+clear all;
+close all;
+clc;
+
+%% Importing channel data
+l = 27;
+k = 14;
+n = 416;
+RIS_idx = [36,34,33,35,37,38,44,45,48,49,52,55,56,57];
+P = zeros(l,k,n);
+for g = 1:length(RIS_idx)
+    % Tx to RIS
+    Tx_file_var = 1:l;
+    for j = 1:length(Tx_file_var)
+        if Tx_file_var(j)<=9
+            filename = "D:\lund university\thesis\sim results\sony x3d1\SONY Thesis.cir.t00"+string(Tx_file_var(j)) +"_26.r0"+string(RIS_idx(g))+".p2m";
+        else
+            filename = "D:\lund university\thesis\sim results\sony x3d1\SONY Thesis.cir.t0"+string(Tx_file_var(j)) +"_26.r0"+string(RIS_idx(g))+".p2m";
+        end
+        dataLines = [6, Inf];
+        bs1 = import_CIR_file(filename,dataLines);
+        f = 5e9;
+        [H_f,cir_bs1,Rx_power] = Channel_data_calc(bs1,f);
+        H_Tx_RIS(j,g,:) = H_f.';
+        H_Tx_RIS1(j,:) = H_f.';
+    end
+    
+    % RIS to Rx (Rx to RIS)
+    Rx_file_var = 1:n;
+    for y = 1:length(Rx_file_var)
+        if Rx_file_var(y)<=9
+            filename = "D:\lund university\thesis\sim results\sony x3d1\SONY Thesis.cir.t00"+string(Rx_file_var(y)) +"_25.r0"+string(RIS_idx(g))+".p2m";
+        elseif Rx_file_var(y) <= 99 && Rx_file_var(y) > 9
+            filename = "D:\lund university\thesis\sim results\sony x3d1\SONY Thesis.cir.t0"+string(Rx_file_var(y)) +"_25.r0"+string(RIS_idx(g))+".p2m";
+        else
+            filename = "D:\lund university\thesis\sim results\sony x3d1\SONY Thesis.cir.t"+string(Rx_file_var(y)) +"_25.r0"+string(RIS_idx(g))+".p2m";
+        end
+        dataLines = [6, Inf];
+        bs1 = import_CIR_file(filename,dataLines);
+        f = 5e9;
+        [H_f,cir_bs1,Rx_power] = Channel_data_calc(bs1,f);
+        H_Rx_RIS(y,g,:) = H_f.';
+        H_Rx_RIS1(y,:) = H_f.';
+    end
+    H_RIS_Rx1 = H_Rx_RIS1.';
+    H_Tx_Rx1(:,g,:) = abs(H_Tx_RIS1)*abs(H_RIS_Rx1);
+    P(:,g,:) = H_Tx_Rx1(:,g,:).^2;
+end
+%% Checking kong code
+for i = 1:l
+    for j = 1:k
+        for q = 1:n
+            H_Tx_Rx(i,j,q) = sum(abs(H_Tx_RIS(i,j,:)).*abs(H_Rx_RIS(q,j,:)));
+            P1(i,j,q) = H_Tx_Rx(i,j,q).^2;
+        end
+    end
+end
+
+% %% Optimisation part
+% 
+% P_vec = P(:).';
+% 
+% T = -30;
+% %A matrix
+% row_A1 = [];
+% for q = 1:n
+%     for w = 1:k
+%         row_A1 = [1,zeros(1,l-1),row_A1];
+%     end
+% end
+% A1 = zeros(l,l*k*n);
+% A1(1,:) = row_A1;
+% for q = 1:l-1
+%     temp = [row_A1(1,length(row_A1)-q+1:length(row_A1)),row_A1(1,1:length(row_A1)-q)];
+%     A1(q,:) = temp;
+% end
+% row_A2 = [];
+% for q = 1:n
+%     row_A2 = [ones(1,l),zeros(1,(k-1).*l),row_A2];
+% end
+% A2 = zeros(k,l*k*n);
+% A2(1,:) = row_A2;
+% for q = 1:k-1
+%     temp1 = [row_A2(1,length(row_A2)-q*l + 1:length(row_A2)),row_A2(1,1:length(row_A2)-q*l)];
+%     A2(q,:) = temp1;
+% end
+% row_A3 = [ones(1,l*k),zeros(1,(n-1)*l*k)];
+% A3 = zeros(n,l*k*n);
+% A3(1,:) = row_A3;
+% for q = 1:n-1
+%     A3(q,:) = [row_A3(1,length(row_A3)-q*k*l + 1 : length(row_A3)),row_A3(1,1:length(row_A3)-q*k*l)];
+% end
+% row_A4 = [ones(1,l*k),zeros(1,(n-1)*l*k)];
+% A4 = zeros(n,l*k*n);
+% A4(1,:) = row_A4;
+% for q = 1:n-1
+%     A4(q,:) = [row_A4(1,length(row_A4)-q*k*l + 1 : length(row_A4)),row_A4(1,1:length(row_A4)-q*k*l)];
+% end
+% A = [A1;A2;A3;-P_vec.*A4];
+% 
+% A5 = [-k.*n.*eye(l),zeros(l,k)];
+% A5 = [A5;zeros(k,l),-l.*n.*eye(k)];
+% A5 = [A5;zeros(2*n,k+l)];
+% 
+% A = [A,A5];
+% % B matrix
+% B = [zeros(l,1);zeros(k,1);ones(n,1);-T.*ones(n,1)];
+% % Aeq matrix
+% Aeq = [zeros(1,l*k*n),ones(1,l),zeros(1,k);zeros(1,l*k*n),zeros(1,l),ones(1,k)];
+% % Beq matrix
+% L_ap = 0;
+% L_ris = 1;
+% Beq = [L_ap;L_ris];
